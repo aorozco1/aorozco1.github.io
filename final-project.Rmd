@@ -9,11 +9,13 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-**Introduction**
+**Introduction:**
+
 Videogames are a huge market, according to fortune.com the total revenues for the industry were $23.5 billion in 2015 in the US alone. In this tutorial, I will show how to collect data on video game sales and then tidy it. After that, we will do some exploratory analysis on the data, in order to come up with possible hypotheses about the data. Then I will show how to test these hypotheses using Machine Learning.
 
 
 **1. Starting**
+
 To start off, download the CSV file from https://www.kaggle.com/rush4ratio/video-game-sales-with-ratings. This file is in CSV format. You then read the CSV into an R dataframe. The data has these fields: Name (Name of videogame), Platform (Platform game is sold on (PS4/Wii/etc.)), Year_Of_Release (year game was initially released), Genre (type of game (action,sports, role-playing,etc.)), Publisher (who published the game (Ninentdo, Microsoft, etc.)), NA_Sales (number of copies sold in North America),EU_Sales (number of copies sold in the European Union), JP_Sales (number of copies sold in Japan), Other_Sales (number of copies sold everywhere else), Global_Sales (total sales of game), Critic_Score (aggregate score of game taken from Metacritic.com from professional critics), Critic_Count (how many scores were taken to make up the aggregate score), User_Score (aggregate score of game taken from metacritic.com from reviewers on the site), User_Count (Number of users who gave a user_score), Developer (party responsible for creating the game), and Rating (ESRB rating of game (E,T,M,etc.))
 ```{r load}
 library(tidyverse)
@@ -77,12 +79,12 @@ total_sales_df %>%
   geom_line()
 ```
 
-
+This graph shows all the critic_scores for every game for every year after 1995. 
 ```{r scores}
 videoGameData %>%
   filter(!is.na(Critic_Score)) %>%
   filter(!is.na(User_Score)) %>%
-  filter(Year_of_Release > 1995) %>%
+  filter(Year_of_Release > 1995 && Year_of_Release <= 2016) %>%
   ggplot(aes(x=Year_of_Release,y=Critic_Score)) + geom_point() +
   ggtitle("Critic Scores by Year of Release")
 ```
@@ -135,6 +137,8 @@ sales_by_genre %>%
     theme( axis.text.x = element_text(angle=90, hjust=1)) 
 ```
 
+
+
 ```{r}
 top_publishers <- videoGameData %>%
   filter(!is.na(Critic_Score)) %>%
@@ -156,7 +160,7 @@ top_publishers %>%
   ggtitle("Top 10 Publishers") 
 ```
 
-Would like to examine what is the best predictor for the a game's sales being successful. We will define "successful" as being double the mean number of sales (which is 536,360 total units sold globally). To start off, we will look at a logistic regression for critic sales.
+Would like to examine what is the best predictor for the a game's sales being successful. We will define "successful" as being double the mean number of sales (which is 536,360 total units sold globally). My initial hypothesis is that critic scores do have a noticable effect on a game being successful.
 ```{r}
 mean_sales <- mean(videoGameData$Global_Sales)
 greater_than_mean <- videoGameData %>%
@@ -168,18 +172,18 @@ greater_than_mean %>%head()
 
 ```
 
-
+To start off, we will look at a logistic regression for critic sales. The p-value for this is very low so we reject the null hypothesis that just critic scores have a noticable impact on a game being "successful" commercially. 
 ```{r critic_reg}
 
-default_fit <- glm(isSuccessful ~ Critic_Score, data=greater_than_mean, family=binomial)
+default_fit <- glm(isSuccessful ~ Critic_Score , data=greater_than_mean, family=binomial)
 default_fit %>% 
   broom::tidy() 
 
 ```
 
-
+To check how good our classifiers are doing, we compute the error rate for the classifiers. As can be seen below, the model is fairly good at predicting false data (False/False). But is not particularly good at predicting (True,True) data.
 ```{r eval_classifier}
-lda_fit <- MASS::lda(isSuccessful ~ Critic_Score, data=greater_than_mean)
+lda_fit <- MASS::lda(isSuccessful ~ Critic_Score , data=greater_than_mean)
 lda_pred <- predict(lda_fit, data=greater_than_mean)
 print(table(predicted=lda_pred$class, observed=greater_than_mean$isSuccessful))
 #error rate
@@ -195,46 +199,29 @@ is_top_publisher <- videoGameData %>%
   mutate(isTopPublisher = ifelse(is.element(videoGameData$Publisher,top_publishers$Publisher),TRUE,FALSE)) %>%
  filter(!is.na(Critic_Score)) %>%
  filter(!is.na(User_Score)) %>%
-  dplyr::select(Name,Publisher,Global_Sales,isTopPublisher,isSuccessful)
+  dplyr::select(Name,Publisher,Global_Sales,isTopPublisher,isSuccessful,Critic_Score,User_Score)
 
 ```
 
-
-
-
+Next, we will try a multiple logic regression, with Critic_Score, User_Score, and isTopPublisher, which checks if the row's publisher is considered a "top publisher" (top publisher is defined as top 10 publishers in game copies sold). The p-value was again low for this, meaning that we again reject the null hypothesis that Critic_Score, User_Score and isTopPublisher affect if a game is successful in a statistically significant way.
 ```{r}
-fit_is_top <- glm(isSuccessful~ isTopPublisher,data=is_top_publisher,family=binomial) 
+fit_is_top <- glm(isSuccessful~Critic_Score + User_Score + isTopPublisher,data=is_top_publisher,family=binomial) 
 fit_is_top %>%
   broom::tidy()
 
 ```
 
-
+We compute the error rate for the glm model for predicting isSucessful from Critic_Score, User_Score, and isTopPublisher. Again it is not particularly good at predicing False/False and True/True.
 ```{r}
-lda_fit <- MASS::lda(isSuccessful ~ isTopPublisher, data=is_top_publisher)
+lda_fit <- MASS::lda(isSuccessful~Critic_Score + User_Score + isTopPublisher ,data=is_top_publisher)
 lda_pred <- predict(lda_fit, data=is_top_publisher)
 print(table(predicted=lda_pred$class, observed=is_top_publisher$isSuccessful))
-
-
-```
-
-```{r}
-mean_score <- mean(greater_than_mean$Critic_Score)
-mean_game_data  <- greater_than_mean%>%
-  mutate(higher_than_avg = ifelse(mean_score > greater_than_mean$Critic_Score,FALSE,TRUE))
-
-```
-
-
-```{r}
-lda_fit <- MASS::lda(isSuccessful ~ Global_Sales, data=mean_game_data)
-lda_pred <- predict(lda_fit, data=mean_game_data)
-print(table(predicted=lda_pred$class, observed=mean_game_data$isSuccessful))
 #error rate
-mean(mean_game_data$isSuccessful != lda_pred$class) * 100
+mean(is_top_publisher$isSuccessful!= lda_pred$class) * 100
 # dummy error rate
-mean(mean_game_data$isSuccessful!= FALSE) * 100
-
-
+mean(is_top_publisher$isSuccessful!= FALSE) * 100
 
 ```
+
+
+
