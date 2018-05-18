@@ -29,7 +29,7 @@ videoGameData %>% head() %>%
   as_data_frame()
 ```
 
-**Tidying Data:**
+**2.Tidying Data:**
 The data has some columns where there are rows with no-values. So we set that to NA. Then, User_Score and Year_Of_Release are stored as factors rather than numeric values,so we change them from factors to ints. In addition, User_Score is using a 0-10 rating system rather than 0-100 rating system that Critic_Score is using so we convert all of those values so that it is consistent. In addition, all of the sales figures are in millions (77 in the original data set would mean 77 million). So, we convert that 77 to 77 million. Finally, there was data in the dataset that either didnt have a year of release, or was from before 2016 (this data was taken early 2016), so that data is filtered out.
 
 ```{r clean_data}
@@ -57,7 +57,7 @@ videoGameData <- videoGameData%>%
 videoGameData %>% head()
 ```
 
-**Exploration**
+**3.Exploration**
 
 
 To start off, I wanted to answer the question of: What is the trend for number of sales of all videogames by year? There has overall been a huge spike in videogame sales starting in the 2000's that continually went up until approximately 2010. The recent drop in sales could possibly be accounted for by the sharp decrease in number of new games being released starting in 2011. (shown in next graph)
@@ -160,6 +160,9 @@ top_publishers %>%
   ggtitle("Top 10 Publishers") 
 ```
 
+
+
+**4.Hypothesis Testing and ML**
 Would like to examine what is the best predictor for the a game's sales being successful. We will define "successful" as being double the mean number of sales (which is 536,360 total units sold globally). My initial hypothesis is that critic scores do have a noticable effect on a game being successful.
 ```{r}
 mean_sales <- mean(videoGameData$Global_Sales)
@@ -192,7 +195,7 @@ mean(greater_than_mean$isSuccessful != lda_pred$class) * 100
 mean(greater_than_mean$isSuccessful!= FALSE) * 100
 ```
 
-
+This creates a new dataframe that we will use in our next logistic regression model. This creates a new column which checks if the Publisher of a game is considered a "top publisher". A top publisher is defined as top 10 publishers in game copies sold.
 ```{r}
 is_top_publisher <- videoGameData %>%
    mutate(isSuccessful = ifelse(videoGameData$Global_Sales > mean_sales,TRUE,FALSE)) %>%
@@ -211,7 +214,7 @@ fit_is_top %>%
 
 ```
 
-We compute the error rate for the glm model for predicting isSucessful from Critic_Score, User_Score, and isTopPublisher. Again it is not particularly good at predicing False/False and True/True.
+We compute the error rate for the glm model for predicting isSucessful from Critic_Score, User_Score, and isTopPublisher. The model was decent at predicting whether a game was not successful, but again was not good at predicting whether a game was successful.
 ```{r}
 lda_fit <- MASS::lda(isSuccessful~Critic_Score + User_Score + isTopPublisher ,data=is_top_publisher)
 lda_pred <- predict(lda_fit, data=is_top_publisher)
@@ -224,4 +227,5 @@ mean(is_top_publisher$isSuccessful!= FALSE) * 100
 ```
 
 
-
+**5.Conclusion**
+Overall, we were not able to find a good logistic regression model that fit in with my hypotheses. I can see a few reasons as to why this is. First off, almost all of the highest selling games are games that come with the Platform that you can play them on. As a result, there are many well selling games that simply come with the Platform when you purchase it, so people do not actively choose to purchase many of these popular games. Another important reason is that the source of the data: VGChartz (as stated in the kaggle link) can be unreliable, especially in recent years. This is due to data from VGChartz only counting the physical copies sold for games, when in recent years the majority of sales are often online sales. As a result of this, much of the more "recent" data (from Platforms such as PS3/PS4/XBOX360/XBOX ONE/WII/etc. which allow you to purchase games online, from 2006 and onward) can be considered inaccurate as it is missing a very sizable portion of the data from 2006 onwards. This is especially important as in one of my previous graphs, it is shown that more than half the data is from after 2006.
