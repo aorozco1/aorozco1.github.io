@@ -1,0 +1,240 @@
+---
+title: "final-project"
+author: "Adriel Orozco"
+date: "5/16/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Introduction**
+Videogames are a huge market, according to fortune.com the total revenues for the industry were $23.5 billion in 2015 in the US alone. In this tutorial, I will show how to collect data on video game sales and then tidy it. After that, we will do some exploratory analysis on the data, in order to come up with possible hypotheses about the data. Then I will show how to test these hypotheses using Machine Learning.
+
+
+**1. Starting**
+To start off, download the CSV file from https://www.kaggle.com/rush4ratio/video-game-sales-with-ratings. This file is in CSV format. You then read the CSV into an R dataframe. The data has these fields: Name (Name of videogame), Platform (Platform game is sold on (PS4/Wii/etc.)), Year_Of_Release (year game was initially released), Genre (type of game (action,sports, role-playing,etc.)), Publisher (who published the game (Ninentdo, Microsoft, etc.)), NA_Sales (number of copies sold in North America),EU_Sales (number of copies sold in the European Union), JP_Sales (number of copies sold in Japan), Other_Sales (number of copies sold everywhere else), Global_Sales (total sales of game), Critic_Score (aggregate score of game taken from Metacritic.com from professional critics), Critic_Count (how many scores were taken to make up the aggregate score), User_Score (aggregate score of game taken from metacritic.com from reviewers on the site), User_Count (Number of users who gave a user_score), Developer (party responsible for creating the game), and Rating (ESRB rating of game (E,T,M,etc.))
+```{r load}
+library(tidyverse)
+library(ISLR)
+library(dplyr)
+library(broom)
+library(ggplot2)
+#loading data from csv
+videoGameData <- read.csv("Video_Games_Sales_as_at_22_Dec_2016.csv")
+videoGameData %>% head() %>%
+  as_data_frame()
+```
+
+**Tidying Data:**
+The data has some columns where there are rows with no-values. So we set that to NA. Then, User_Score and Year_Of_Release are stored as factors rather than numeric values,so we change them from factors to ints. In addition, User_Score is using a 0-10 rating system rather than 0-100 rating system that Critic_Score is using so we convert all of those values so that it is consistent. In addition, all of the sales figures are in millions (77 in the original data set would mean 77 million). So, we convert that 77 to 77 million. Finally, there was data in the dataset that either didnt have a year of release, or was from before 2016 (this data was taken early 2016), so that data is filtered out.
+
+```{r clean_data}
+#User_Score saved as a factor, converting it to double, then multiplying that by 10 so its the same format as the Critic_Score column. Also multiplied each of the sales numbers by 1 million, as the previous values were in thousands
+videoGameData$User_Score <- as.numeric(as.character(videoGameData$User_Score))
+videoGameData$Year_of_Release <- as.integer(as.character(videoGameData$Year_of_Release))
+videoGameData$User_Score <- videoGameData$User_Score * 10.0
+videoGameData$User_Score <- as.integer(videoGameData$User_Score)
+videoGameData$NA_Sales <- videoGameData$NA_Sales * 1000000
+videoGameData$NA_Sales <- as.integer(videoGameData$NA_Sales)
+videoGameData$EU_Sales <- videoGameData$EU_Sales * 1000000
+videoGameData$EU_Sales <- as.integer(videoGameData$EU_Sales)
+videoGameData$JP_Sales <- videoGameData$JP_Sales * 1000000
+videoGameData$JP_Sales <- as.integer(videoGameData$JP_Sales)
+videoGameData$Other_Sales <- videoGameData$Other_Sales * 1000000
+videoGameData$Other_Sales <- as.integer(videoGameData$Other_Sales)
+videoGameData$Global_Sales <- videoGameData$Global_Sales * 1000000
+videoGameData$Global_Sales <- as.integer(videoGameData$Global_Sales)
+videoGameData$Rating[videoGameData$Rating == ""] <- NA
+videoGameData$Developer[videoGameData$Developer == ""] <- NA
+#filtering data before 2016, as some values were N/A, or non-valid dates
+videoGameData <- videoGameData%>%
+  filter(Year_of_Release <= 2016) 
+
+videoGameData %>% head()
+```
+
+**Exploration**
+
+
+To start off, I wanted to answer the question of: What is the trend for number of sales of all videogames by year? There has overall been a huge spike in videogame sales starting in the 2000's that continually went up until approximately 2010. The recent drop in sales could possibly be accounted for by the sharp decrease in number of new games being released starting in 2011. (shown in next graph)
+
+```{r time}
+total_sales_df <- videoGameData %>%
+  group_by(Year_of_Release) %>%
+  summarize(sum(Global_Sales))
+total_sales_df
+
+total_sales_df$totalSales = total_sales_df$`sum(Global_Sales)`
+
+total_sales_df <- 
+  total_sales_df %>% dplyr::select(Year_of_Release,totalSales)
+
+total_sales_df %>% 
+  ggplot(mapping=aes(x=Year_of_Release,y=totalSales)) +
+  ggtitle("Total Video Game Sales by Year") + 
+  geom_line()
+```
+
+
+```{r scores}
+videoGameData %>%
+  filter(!is.na(Critic_Score)) %>%
+  filter(!is.na(User_Score)) %>%
+  filter(Year_of_Release > 1995) %>%
+  ggplot(aes(x=Year_of_Release,y=Critic_Score)) + geom_point() +
+  ggtitle("Critic Scores by Year of Release")
+```
+
+The number of new games being released starting in 2012 took a noticeably big dip, being almost halved from the previous year. It has since stayed fairly consistent. Visually, the two graphs (Total Video Game Sales by Year) and (Number of New Games Released Each Year) are very similar. Indicating that the more video games created, the more sales.
+
+
+```{r count}
+num_new_releases <- videoGameData %>%
+  group_by(Year_of_Release) %>%
+  count()
+
+num_new_releases$NumNewReleases <- num_new_releases$n
+num_new_releases %>%
+  ggplot(mapping=aes(x=Year_of_Release,y=NumNewReleases)) + 
+  ggtitle("Number of New Games released each Year") +
+  geom_col(fill="blue") 
+```
+
+This graph looks at the Total Sales by each Region (NA,JP,EU, and Other) for each year. Overall it seems that NA is the region with the most sales, followed by the EU. Then, JP and Other are at the bottom, being fairly close to each other.
+```{r}
+sales_by_region <- videoGameData %>%
+  group_by(Year_of_Release) %>%
+  summarize(sum(NA_Sales),sum(EU_Sales),sum(JP_Sales),sum(Other_Sales))
+
+region_sales_long <- reshape2::melt(sales_by_region,id="Year_of_Release",measure= c("sum(NA_Sales)","sum(EU_Sales)","sum(JP_Sales)","sum(Other_Sales)"))
+
+ggplot(region_sales_long,aes(Year_of_Release,value,colour=variable))+
+         geom_line() +
+          ylab("Sales by Region") +
+         ggtitle("Total Sales by Region")
+ 
+```
+
+
+
+Next, I wanted to see which genre of games overall has the best sales. We have found that Action and Sports games are the overall best sellers.
+```{r by_genre}
+sales_by_genre <- videoGameData %>%
+  group_by(Genre) %>%
+   summarize(sum(Global_Sales)) %>%
+  filter(!Genre == "")
+  
+
+sales_by_genre %>%
+  ggplot(mapping = aes(x=Genre,y=`sum(Global_Sales)`)) +
+  ggtitle("Sales by Genre") +
+  geom_col() +
+    ylab("Total Global Sales") +
+    theme( axis.text.x = element_text(angle=90, hjust=1)) 
+```
+
+```{r}
+top_publishers <- videoGameData %>%
+  filter(!is.na(Critic_Score)) %>%
+  filter(!is.na(User_Score)) %>%
+  group_by(Publisher) %>%
+  summarize(sum(Global_Sales))
+
+top_publishers$totalSales = top_publishers$`sum(Global_Sales)`
+top_publishers <- top_publishers %>%
+  dplyr::select(totalSales,Publisher) %>%
+  arrange(desc(totalSales)) %>%
+  slice(1:10)
+
+
+top_publishers %>%
+  ggplot(mapping=aes(x=Publisher,y=totalSales)) +
+  geom_col()  +
+    theme( text = element_text(size=8),axis.text.x = element_text(angle=90, hjust=1)) + 
+  ggtitle("Top 10 Publishers") 
+```
+
+Would like to examine what is the best predictor for the a game's sales being successful. We will define "successful" as being double the mean number of sales (which is 536,360 total units sold globally). To start off, we will look at a logistic regression for critic sales.
+```{r}
+mean_sales <- mean(videoGameData$Global_Sales)
+greater_than_mean <- videoGameData %>%
+                  mutate(isSuccessful = ifelse(videoGameData$Global_Sales > mean_sales,TRUE,FALSE)) %>%
+  dplyr::select(Name,Critic_Score,User_Score,isSuccessful,Global_Sales,NA_Sales,EU_Sales,JP_Sales,Other_Sales,Platform) %>%
+  filter(!is.na(Critic_Score)) %>%
+ filter(!is.na(User_Score))
+greater_than_mean %>%head() 
+
+```
+
+
+```{r critic_reg}
+
+default_fit <- glm(isSuccessful ~ Critic_Score, data=greater_than_mean, family=binomial)
+default_fit %>% 
+  broom::tidy() 
+
+```
+
+
+```{r eval_classifier}
+lda_fit <- MASS::lda(isSuccessful ~ Critic_Score, data=greater_than_mean)
+lda_pred <- predict(lda_fit, data=greater_than_mean)
+print(table(predicted=lda_pred$class, observed=greater_than_mean$isSuccessful))
+#error rate
+mean(greater_than_mean$isSuccessful != lda_pred$class) * 100
+# dummy error rate
+mean(greater_than_mean$isSuccessful!= FALSE) * 100
+```
+
+
+```{r}
+is_top_publisher <- videoGameData %>%
+   mutate(isSuccessful = ifelse(videoGameData$Global_Sales > mean_sales,TRUE,FALSE)) %>%
+  mutate(isTopPublisher = ifelse(is.element(videoGameData$Publisher,top_publishers$Publisher),TRUE,FALSE)) %>%
+ filter(!is.na(Critic_Score)) %>%
+ filter(!is.na(User_Score)) %>%
+  dplyr::select(Name,Publisher,Global_Sales,isTopPublisher,isSuccessful)
+
+```
+
+
+
+
+```{r}
+fit_is_top <- glm(isSuccessful~ isTopPublisher,data=is_top_publisher,family=binomial) 
+fit_is_top %>%
+  broom::tidy()
+
+```
+
+
+```{r}
+lda_fit <- MASS::lda(isSuccessful ~ isTopPublisher, data=is_top_publisher)
+lda_pred <- predict(lda_fit, data=is_top_publisher)
+print(table(predicted=lda_pred$class, observed=is_top_publisher$isSuccessful))
+
+
+```
+
+```{r}
+mean_score <- mean(greater_than_mean$Critic_Score)
+mean_game_data  <- greater_than_mean%>%
+  mutate(higher_than_avg = ifelse(mean_score > greater_than_mean$Critic_Score,FALSE,TRUE))
+
+```
+
+
+```{r}
+lda_fit <- MASS::lda(isSuccessful ~ Global_Sales, data=mean_game_data)
+lda_pred <- predict(lda_fit, data=mean_game_data)
+print(table(predicted=lda_pred$class, observed=mean_game_data$isSuccessful))
+#error rate
+mean(mean_game_data$isSuccessful != lda_pred$class) * 100
+# dummy error rate
+mean(mean_game_data$isSuccessful!= FALSE) * 100
+
+
+
+```
