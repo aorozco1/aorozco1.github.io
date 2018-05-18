@@ -29,7 +29,8 @@ videoGameData %>% head() %>%
   as_data_frame()
 ```
 
-**2.Tidying Data:**
+**2.Tidying Data**
+
 The data has some columns where there are rows with no-values. So we set that to NA. Then, User_Score and Year_Of_Release are stored as factors rather than numeric values,so we change them from factors to ints. In addition, User_Score is using a 0-10 rating system rather than 0-100 rating system that Critic_Score is using so we convert all of those values so that it is consistent. In addition, all of the sales figures are in millions (77 in the original data set would mean 77 million). So, we convert that 77 to 77 million. Finally, there was data in the dataset that either didnt have a year of release, or was from before 2016 (this data was taken early 2016), so that data is filtered out.
 
 ```{r clean_data}
@@ -163,6 +164,7 @@ top_publishers %>%
 
 
 **4.Hypothesis Testing and ML**
+
 Would like to examine what is the best predictor for the a game's sales being successful. We will define "successful" as being double the mean number of sales (which is 536,360 total units sold globally). My initial hypothesis is that critic scores do have a noticable effect on a game being successful.
 ```{r}
 mean_sales <- mean(videoGameData$Global_Sales)
@@ -228,4 +230,5 @@ mean(is_top_publisher$isSuccessful!= FALSE) * 100
 
 
 **5.Conclusion**
+
 Overall, we were not able to find a good logistic regression model that fit in with my hypotheses. I can see a few reasons as to why this is. First off, almost all of the highest selling games are games that come with the Platform that you can play them on. As a result, there are many well selling games that simply come with the Platform when you purchase it, so people do not actively choose to purchase many of these popular games. Another important reason is that the source of the data: VGChartz (as stated in the kaggle link) can be unreliable, especially in recent years. This is due to data from VGChartz only counting the physical copies sold for games, when in recent years the majority of sales are often online sales. As a result of this, much of the more "recent" data (from Platforms such as PS3/PS4/XBOX360/XBOX ONE/WII/etc. which allow you to purchase games online, from 2006 and onward) can be considered inaccurate as it is missing a very sizable portion of the data from 2006 onwards. This is especially important as in one of my previous graphs, it is shown that more than half the data is from after 2006.
